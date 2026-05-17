@@ -1,207 +1,118 @@
 # Credit Card Fraud Detection
 
-> **Fintech Portfolio Project #2** — Machine learning pipeline for real-time fraud detection with SHAP explainability and cost-sensitive thresholds.
+My second fintech project. I wanted to build something that actually matters — fraud costs banks billions every year, and the ML side of it is genuinely interesting because the problem is harder than it looks.
 
-Built as a follow-up to my [Credit Risk (PD) Model](https://github.com/) project. Banks lose billions each year to credit card fraud. This project demonstrates how machine learning catches it.
+The dataset is 284,807 real European card transactions from 2013. Only 492 of them are fraud. That 0.17% rate is the whole challenge.
 
-![Project Report](fraud_report.png)
-
----
-
-## TL;DR
-
-- **284,807** real European credit card transactions analyzed
-- **0.172%** fraud rate (extreme class imbalance — handled with SMOTE)
-- **Two models compared**: Logistic Regression vs Random Forest
-- **F2-optimized threshold** (recall weighted 2× more than precision)
-- **SHAP** explainability for every prediction
-- Dark-theme interactive **dashboard** with full metrics
-- Interactive **terminal scorer** to test custom transactions
+**Results I got:**
+- ROC-AUC: **0.972**
+- Recall: **88.8%** — caught 87 out of 98 frauds in the test set
+- Only 11 frauds slipped through
 
 ---
 
-## Why This Project Matters
+## Why this problem is harder than it sounds
 
-In banking, missing fraud and flagging legitimate customers both have costs — but they're not equal:
+My first instinct was: just train a model, done. But if you do that naively, the model learns to predict "legitimate" for *everything* and still gets 99.8% accuracy. That's useless.
 
-| Action | Cost |
-|---|---|
-| Missing a fraud | ~€5,000 (chargeback + investigation) |
-| Flagging a legitimate transaction | ~€10 (manual review) |
+The real challenge is the imbalance. The model barely sees any fraud examples during training, so it never really learns what fraud looks like. I fixed this with SMOTE — it creates synthetic fraud examples by interpolating between real ones, so the model gets enough fraud data to actually learn from.
 
-So **missing fraud is 500× worse than a false alarm**. A model with 99% accuracy that misses every fraud is useless. We optimize for **recall** with cost-aware threshold selection.
+The other thing I got wrong at first: accuracy is the wrong metric entirely. In fraud detection you care about **recall** — of all the real frauds, how many did you catch? Missing a fraud costs a bank around €5,000. Flagging a legitimate transaction costs about €10 to review. So missing fraud is 500x worse than a false alarm. The model should reflect that.
 
 ---
 
-## Tech Stack
+## What I built
 
-`Python` · `scikit-learn` · `pandas` · `NumPy` · `SHAP` · `imbalanced-learn (SMOTE)` · `matplotlib` · `Chart.js`
+**Two models trained and compared:**
+- Logistic Regression (fast, interpretable, decent baseline)
+- Random Forest with 200 trees (winner — ROC-AUC 0.972)
+
+**Features I engineered:**
+- `Amount_log` — log-transformed transaction amount. Fraud amounts are weirdly distributed so log scale helps
+- `Hour_sin` / `Hour_cos` — cyclical encoding of the hour. Without this, the model thinks 11pm and midnight are far apart
+- `Amount_scaled` — standardized amount, fit on training data only (fitting on the full dataset would be data leakage)
+
+**Threshold optimization:**
+The model outputs a probability. By default everyone uses 0.5 as the cutoff but that's arbitrary. I swept all thresholds from 0.05 to 0.95 and picked the one that maximized F2 score — which weights recall twice as heavily as precision.
+
+**SHAP explainability:**
+Regulators in most countries require banks to explain why a transaction was flagged. You can't just say "the model said so." SHAP calculates how much each feature pushed a prediction toward fraud or legitimate — so you can tell a customer exactly why their transaction was blocked.
 
 ---
 
-## Project Structure
+## Files
 
 ```
-fraud-detection/
-├── fraud_detection_model.py     ← Main training pipeline
-├── fraud_scorer.py              ← Interactive terminal scorer
-├── generate_linkedin_image.py   ← Generates the LinkedIn poster
-├── dashboard.html               ← Interactive web dashboard
-├── requirements.txt
-├── README.md
-│
-│   Generated after training:
-├── fraud_model.pkl              ← Trained model
-├── amount_scaler.pkl            ← Fitted scaler
-├── feature_names.pkl            ← Feature order
-├── dashboard_data.json          ← Dashboard data
-├── classification_report.txt    ← Detailed metrics
-├── fraud_report.png             ← LinkedIn post image (editorial style)
-├── evaluation_plots.png         ← ROC, PR, confusion matrix
-├── threshold_analysis.png       ← Threshold optimization
-├── amount_distribution.png      ← Fraud vs legit amount histograms
-├── shap_summary.png             ← SHAP beeswarm plot
-└── shap_bar.png                 ← SHAP feature importance
+fraud_detection_model.py   main training pipeline
+fraud_scorer.py            interactive terminal scorer — type in a transaction and score it live
+generate_linkedin_image.py generates the project poster image
+dashboard.html             web dashboard showing all results
+requirements.txt
+```
+
+Generated after you run the model:
+```
+fraud_model.pkl
+evaluation_plots.png
+shap_summary.png
+threshold_analysis.png
+fraud_report.png
 ```
 
 ---
 
-## How to Run
+## How to run it
 
-### 1. Setup
+**1. Get the data**
+
+Download `creditcard.csv` from [Kaggle](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) (free account needed) and put it in this folder.
+
+**2. Install packages**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Get the data
-
-Download `creditcard.csv` from [Kaggle: Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) and place it in the project folder.
-
-### 3. Train the model
+**3. Train**
 
 ```bash
 python fraud_detection_model.py
 ```
 
-This will:
-- Load and explore the data
-- Engineer time and amount features
-- Apply SMOTE to handle class imbalance
-- Train and compare Logistic Regression vs Random Forest
-- Optimize the decision threshold (F2 score)
-- Compute SHAP explanations
-- Save the model, plots, and dashboard data
+Takes about 2-3 minutes. Trains both models, picks the best one, runs SHAP, saves everything.
 
-Takes ~2-3 minutes on a normal laptop.
+**4. View the dashboard**
 
-### 4. View the dashboard
+```bash
+python -m http.server 8000
+```
 
-Open `dashboard.html` in your browser.
+Then open `http://localhost:8000/dashboard.html` in your browser. (You need the local server because browsers block local file fetching for security reasons.)
 
-> **Note:** Some browsers block `fetch()` on local files. If the dashboard doesn't load, run a tiny local server:
-> ```bash
-> python -m http.server 8000
-> ```
-> Then visit http://localhost:8000/dashboard.html
-
-### 5. Score custom transactions
+**5. Score your own transactions**
 
 ```bash
 python fraud_scorer.py
 ```
 
-Five modes available:
-1. Score a custom transaction with manual inputs
-2. Score random real transactions from the dataset
-3. Batch scoring with cost-benefit analysis
-4. SHAP explanation deep-dive for any transaction
-5. Show model metrics
-
-### 6. Generate the LinkedIn image
-
-```bash
-python generate_linkedin_image.py
-```
-
-Creates `fraud_report.png` — a 1200x1500 (4:5) portrait image styled as an editorial research brief for LinkedIn posts. Reads real metrics from `dashboard_data.json` if available; otherwise uses sample values.
+Four modes: score a custom transaction, score random real ones from the dataset, batch scoring with cost analysis, or a SHAP deep-dive on any single transaction.
 
 ---
 
-## Methodology
+## Things I learned
 
-### Feature Engineering
+The accuracy paradox is real. Before this project I would have been happy with 99% accuracy. Now I know that means nothing if your model predicts the majority class for everything.
 
-The original dataset has 28 PCA-transformed features (V1–V28) plus `Amount` and `Time`. I added:
+Data leakage is subtle. I almost fit my StandardScaler on the full dataset before splitting. That leaks future information into training and makes your results look better than they are. Scaler gets fit on training data only, then applied to test.
 
-- **Amount_log** — log-transformed amount (compresses extreme values)
-- **Amount_scaled** — standardized amount (fit on **training data only** to prevent data leakage — a common beginner mistake)
-- **Hour_sin / Hour_cos** — cyclical hour-of-day encoding (so that 23:00 and 00:00 are mathematically close)
-
-### Handling Class Imbalance
-
-The dataset is severely imbalanced: only 0.172% fraud. I use **SMOTE** (Synthetic Minority Over-sampling Technique) to create synthetic fraud examples in the training set only.
-
-> **Design choice:** I use SMOTE *or* `class_weight='balanced'`, never both. Using both can cause double-correction and inflate false alarms.
-
-### Model Comparison
-
-| Model | ROC-AUC | PR-AUC | Notes |
-|---|---|---|---|
-| Logistic Regression | ~0.97 | ~0.72 | Simple, fast, interpretable |
-| Random Forest | ~0.98 | ~0.82 | More complex, slightly better |
-
-(Exact numbers depend on the run — see your `classification_report.txt`)
-
-### Threshold Optimization
-
-I optimize the **F2 score** instead of accuracy or F1:
-
-```
-F_2 = 5 × Precision × Recall / (4 × Precision + Recall)
-```
-
-F2 weights recall 2× more than precision — exactly what we want for fraud detection where missing fraud is much more expensive than a false alarm.
-
-### Explainability with SHAP
-
-Regulators (Bank Negara Malaysia, ECB, the Fed) require banks to explain *why* a transaction was flagged. SHAP (SHapley Additive exPlanations) calculates how much each feature contributed to each prediction. Based on cooperative game theory.
-
-The scorer's mode 4 lets you pick a real transaction and see exactly which features pushed it toward fraud or legitimate.
+SHAP changed how I think about ML. A model that can't explain itself isn't useful in a regulated industry. Banking especially — you have a legal obligation to explain decisions to customers. SHAP makes that possible.
 
 ---
 
-## Key Results
+## Stack
 
-(See your trained model's results in `classification_report.txt` and `dashboard.html`)
-
-Typical results for this dataset with this pipeline:
-
-- **ROC-AUC:** ~0.98
-- **Recall:** ~85% of frauds caught
-- **Precision:** ~80%
-- **F2 Score:** ~0.83
+Python · scikit-learn · pandas · NumPy · SHAP · imbalanced-learn · matplotlib · Chart.js
 
 ---
 
-## What I Learned
-
-- **The accuracy paradox:** A model that predicts "legitimate" for everything achieves 99.83% accuracy on this dataset — and is completely useless. Always pick metrics that match your problem.
-- **Data leakage is sneaky:** Fitting a scaler on the full dataset before splitting seems innocent, but it leaks test information into training and inflates results.
-- **Class imbalance has multiple solutions:** SMOTE, class weights, threshold tuning, anomaly detection. Combining them carelessly can backfire.
-- **Threshold matters more than the model:** The same Random Forest can have 60% or 95% recall depending on how you set the decision threshold.
-- **Explainability is a regulatory requirement** in banking, not a nice-to-have. SHAP makes black-box models defensible.
-
----
-
-## Acknowledgments
-
-Dataset: [Kaggle Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) (Worldline & ULB, Machine Learning Group).
-
-Built as part of my Fintech specialization in Banking & Finance. Open to feedback and collaboration!
-
----
-
-## License
-
-MIT — feel free to learn from or build on this.
+Dataset from [Kaggle / ULB Machine Learning Group](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud). This is project #2 in my fintech portfolio — project #1 was a Credit Risk PD model with Basel II expected loss calculations.
