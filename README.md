@@ -6,7 +6,7 @@ The dataset has 284,807 real European card transactions from 2013. Only 492 of t
 
 **Results:**
 - ROC-AUC: 0.972
-- Recall: 88.8% — caught 87 out of 98 frauds in the test set
+- Recall: 88.8%  caught 87 out of 98 frauds in the test set
 - Only 11 slipped through
 
 ---
@@ -15,7 +15,7 @@ The dataset has 284,807 real European card transactions from 2013. Only 492 of t
 
 My first instinct was just train a model and done. But a model that predicts "legitimate" for everything still gets 99.8% accuracy. Completely useless.
 
-The real problem is the imbalance. The model barely sees fraud during training so it never learns what fraud actually looks like. I fixed this with SMOTE — it creates synthetic fraud examples so the model has enough to learn from.
+The real problem is the imbalance. The model barely sees fraud during training so it never learns what fraud actually looks like. I fixed this with SMOTE  it creates synthetic fraud examples so the model has enough to learn from.
 
 The other thing I got wrong early on: accuracy is the wrong metric. In fraud detection you care about recall. How many real frauds did you catch? Missing a fraud costs a bank around €5,000. A false alarm costs €10 to review. Missing fraud is 500x worse. The model has to reflect that.
 
@@ -23,7 +23,7 @@ The other thing I got wrong early on: accuracy is the wrong metric. In fraud det
 
 ## What I built
 
-Trained and compared two models — Logistic Regression as a baseline and Random Forest with 200 trees. Random Forest won with ROC-AUC 0.972.
+Trained and compared two models Logistic Regression as a baseline and Random Forest with 200 trees. Random Forest won with ROC-AUC 0.972.
 
 Features I engineered:
 - `Amount_log` — log-transformed amount because fraud amounts are weirdly distributed
